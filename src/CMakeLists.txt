@@ -33,7 +33,7 @@ set(LIBS
 
 
 # 
-add_executable (${PROJECT_NAME} "zubrobot-ws.cpp")
+add_executable (${PROJECT_NAME} zubrobot-ws.cpp conf.cpp)
 
 
 #

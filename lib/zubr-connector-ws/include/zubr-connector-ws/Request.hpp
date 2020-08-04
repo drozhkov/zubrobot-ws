@@ -17,14 +17,23 @@ namespace zubr {
 
 	class RequestWs : public Serializable {
 	protected:
+		const static int MethodIdRequest = 9;
+		const static int MethodIdSubscribe = 1;
+		const static int MethodIdUnsubscribe = 2;
+
+	protected:
 		int m_id;
 		int m_methodId;
 		std::string m_methodName;
+		Channel m_channel;
 
 	public:
-		RequestWs( const std::string & methodName = "", int methodId = 9 )
+		RequestWs( const std::string & methodName = "",
+			int methodId = MethodIdRequest,
+			Channel channel = Channel::_undef )
 			: m_methodName( methodName )
 			, m_methodId( methodId )
+			, m_channel( channel )
 			, m_id( 0 )
 		{
 		}
@@ -102,9 +111,9 @@ namespace zubr {
 		/// @param lifetime Order lifetime parameter. Has three possible
 		/// options:
 		///		'GTC' - good 'til cancelled order, active while not cancelled or
-		///			executed 		
+		///			executed
 		///		'IOC' - immediate or cancel order, unfilled part or
-		///			order immediately canceled 		
+		///			order immediately canceled
 		///		'FOK' - fill or kill order, complete
 		///			execution or nothing
 		/// @return
@@ -125,6 +134,14 @@ namespace zubr {
 		}
 
 		void Serialize( SerializerWs * o ) override;
+	};
+
+	class SubscribeRequestWs : public RequestWs {
+	public:
+		SubscribeRequestWs( Channel channel )
+			: RequestWs( "", MethodIdSubscribe, channel )
+		{
+		}
 	};
 
 } // namespace zubr

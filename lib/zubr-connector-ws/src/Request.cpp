@@ -59,9 +59,17 @@ void RequestWs::Serialize( SerializerWs * o, RequestWs & req )
 	node->AddMember( "method", m_methodId, o->Document.GetAllocator() );
 	node->AddMember( "id", m_id, o->Document.GetAllocator() );
 
-	req.Serialize( o );
 	rapidjson::Value params( rapidjson::kObjectType );
-	params.AddMember( "data", *o->Value, o->Document.GetAllocator() );
+
+	if ( m_methodId == MethodIdRequest ) {
+		req.Serialize( o );
+		params.AddMember( "data", *o->Value, o->Document.GetAllocator() );
+	}
+	else {
+		params.AddMember( "channel",
+			rapidjson::Value().Set( ChannelEnumHelper::ToString( m_channel ) ),
+			o->Document.GetAllocator() );
+	}
 
 	node->AddMember( "params", params, o->Document.GetAllocator() );
 }
@@ -76,19 +84,26 @@ void Number::Serialize( SerializerWs * o )
 }
 
 
+void Time::Serialize( SerializerWs * o )
+{
+	o->Value->AddMember( "seconds", m_seconds, o->Document.GetAllocator() );
+	o->Value->AddMember( "nanos", m_nanoseconds, o->Document.GetAllocator() );
+}
+
+
 void AuthRequestWs::Serialize( SerializerWs * o )
 {
+	auto v = o->Value;
+
 	o->Value->AddMember( "method",
 		rapidjson::Value().Set( m_methodName.c_str() ),
 		o->Document.GetAllocator() );
 
-	auto now = std::chrono::duration_cast<std::chrono::seconds>(
-		std::chrono::system_clock::now().time_since_epoch() )
-				   .count();
-
+	auto now = Time::Now();
 	rapidjson::Value time( rapidjson::kObjectType );
-	time.AddMember( "seconds", now, o->Document.GetAllocator() );
-	time.AddMember( "nanos", 0, o->Document.GetAllocator() );
+	o->Value = &time;
+	now.Serialize( o );
+	o->Value = v;
 
 	rapidjson::Value params( rapidjson::kObjectType );
 	params.AddMember( "time", time, o->Document.GetAllocator() );
@@ -97,7 +112,7 @@ void AuthRequestWs::Serialize( SerializerWs * o )
 		o->Document.GetAllocator() );
 
 	std::string digest;
-	Digest::Calculate( digest, m_keyId, m_keySecret, now );
+	Digest::Calculate( digest, m_keyId, m_keySecret, now.Seconds() );
 	params.AddMember( "hmacDigest",
 		rapidjson::Value().SetString(
 			digest.c_str(), o->Document.GetAllocator() ),

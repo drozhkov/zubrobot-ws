@@ -7,6 +7,7 @@
 #define __ZUBR_CONNECTOR_WS__H
 
 
+#include <atomic>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -24,6 +25,7 @@
 
 namespace zubr {
 
+	/// @brief ZUBR websocket connector
 	class ConnectorWs : public ConnectorBase {
 	protected:
 		std::string m_keyId;
@@ -36,15 +38,17 @@ namespace zubr {
 			websocketpp::config::asio_tls_client>::connection_ptr m_connection;
 
 		std::thread m_clientThread;
+		std::atomic_flag m_isRunning;
 
 		std::mutex m_sendSync;
 
-		int m_reqId;
+		volatile id_t m_reqId;
 
-		std::unordered_map<int, RequestWs> m_reqMap;
+		std::unordered_map<id_t, RequestWs> m_reqMap;
 		std::mutex m_reqMapSync;
 
 		std::function<void( ResponseWs & )> m_messageHandler;
+		std::function<void( AuthResponseWs & )> m_connectHandler;
 
 	protected:
 		void OnWsOpen( websocketpp::connection_hdl hdl );
@@ -55,10 +59,10 @@ namespace zubr {
 		websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context>
 		OnWsTlsInit( const char * hostname, websocketpp::connection_hdl );
 
-		void Send( RequestWs & r );
+		id_t Send( RequestWs & r );
 
 	public:
-		/// @brief Zubr websocket connector
+		/// @brief ZUBR websocket connector
 		/// @param keyId API key ID
 		/// @param keySecret API key secret
 		/// @param endpoint API endpoint address
@@ -76,20 +80,43 @@ namespace zubr {
 		{
 		}
 
-		template <typename TReq, typename... TArgs>
-		void Send( const TArgs &... args )
+		virtual ~ConnectorWs()
 		{
-			TReq req( args... );
-			Send( req );
+			m_isRunning.clear();
 		}
 
+		/// @brief sends request
+		/// @tparam TReq type of request
+		/// @tparam ...TArgs
+		/// @param ...args args for request
+		/// @return request ID
+		template <typename TReq, typename... TArgs>
+		id_t Send( const TArgs &... args )
+		{
+			TReq req( args... );
+			return Send( req );
+		}
+
+		/// @brief sets connection handler (invoked on auth response message)
+		/// @param handler
+		void SetConnectHandler(
+			const std::function<void( AuthResponseWs & )> & handler )
+		{
+
+			m_connectHandler = handler;
+		}
+
+		/// @brief set message handler (invoked on every incoming message)
+		/// @param handler
 		void SetMessageHandler(
 			const std::function<void( ResponseWs & )> & handler )
 		{
+
 			m_messageHandler = handler;
 		}
 
 		void Start() override;
+		void Wait();
 	};
 
 } // namespace zubr

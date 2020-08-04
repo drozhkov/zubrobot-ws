@@ -11,6 +11,9 @@
 #include "../include/zubr-connector-ws/ConnectorWs.hpp"
 
 
+//#define ZUBR_DEBUG
+
+
 using namespace zubr;
 
 
@@ -27,36 +30,46 @@ void ConnectorWs::OnWsMessage( websocketpp::connection_hdl,
 {
 	auto & payload = msg->get_payload();
 
-#if 1
+#ifdef ZUBR_DEBUG
 	std::cout << payload << std::endl;
 #endif
 
-	ResponseWs r( ResponseType::_undef );
-	ResponseWs::Deserialize( r, payload );
-
-	if ( r.Id() > -1 ) {
+	auto res = ResponseWs::Deserialize( payload, [this]( id_t id ) {
 		const std::lock_guard<std::mutex> lock( m_reqMapSync );
-		auto reqMapIt = m_reqMap.find( r.Id() );
+		auto reqMapIt = m_reqMap.find( id );
 
 		if ( m_reqMap.end() != reqMapIt ) {
-			ResponseWs res( ResponseType::_undef );
-
 			if ( reqMapIt->second.MethodName()
 				 == AuthRequestWs::ReqMethodName ) {
 
-				res = AuthResponseWs();
-				ResponseWs::Deserialize( res, payload );
-
-				std::cout << "auth result: " << ( res.IsOk() ? "ok" : "err" )
-						  << std::endl;
+				return ResponseType::Auth;
 			}
 
-			m_reqMap.erase( r.Id() );
+			if ( reqMapIt->second.MethodName()
+				 == PlaceOrderRequestWs::ReqMethodName ) {
 
-			if ( m_messageHandler ) {
-				m_messageHandler( res );
+				return ResponseType::PlaceOrder;
 			}
+
+			m_reqMap.erase( id );
 		}
+
+		return ResponseType::_undef;
+	} );
+
+	if ( res->Type() == ResponseType::Auth ) {
+#ifdef ZUBR_DEBUG
+		std::cout << "auth result: " << ( res->IsOk() ? "ok" : "err" )
+				  << std::endl;
+#endif
+
+		if ( m_connectHandler ) {
+			m_connectHandler( *static_cast<AuthResponseWs *>( res.get() ) );
+		}
+	}
+
+	if ( m_messageHandler ) {
+		m_messageHandler( *res );
 	}
 }
 
@@ -82,30 +95,34 @@ ConnectorWs::OnWsTlsInit( const char * hostname, websocketpp::connection_hdl )
 	return ctx;
 }
 
-void ConnectorWs::Send( RequestWs & r )
+zubr::id_t ConnectorWs::Send( RequestWs & r )
 {
 	const std::lock_guard<std::mutex> lock( m_sendSync );
 
 	r.Id( ++m_reqId );
+	id_t result = m_reqId;
 
 	{
 		const std::lock_guard<std::mutex> lock( m_reqMapSync );
-		m_reqMap[m_reqId] = r;
+		m_reqMap[result] = r;
 	}
 
-	if ( m_reqId == std::numeric_limits<int>::max() ) {
+	if ( m_reqId == std::numeric_limits<id_t>::max() ) {
 		m_reqId = 0;
 	}
 
 	std::string req;
 	RequestWs::Serialize( req, r );
 
-#if 1
+#ifdef ZUBR_DEBUG
 	std::cout << req << std::endl;
 #endif
 
+	std::error_code ec;
 	m_client.send(
-		m_connection->get_handle(), req, websocketpp::frame::opcode::text );
+		m_connection->get_handle(), req, websocketpp::frame::opcode::text, ec );
+
+	return result;
 }
 
 void ConnectorWs::Start()
@@ -114,6 +131,7 @@ void ConnectorWs::Start()
 		m_client.set_access_channels( websocketpp::log::alevel::all );
 		m_client.clear_access_channels(
 			websocketpp::log::alevel::frame_payload );
+
 		m_client.set_error_channels( websocketpp::log::elevel::all );
 
 		m_client.init_asio();
@@ -135,20 +153,45 @@ void ConnectorWs::Start()
 				m_hostname.c_str(),
 				websocketpp::lib::placeholders::_1 ) );
 
-		websocketpp::lib::error_code ec;
-		m_connection = m_client.get_connection( m_endpoint, ec );
+		m_isRunning.test_and_set();
 
-		if ( ec ) {
-			std::cout << "could not create connection: " << ec.message()
-					  << std::endl;
+		m_clientThread = std::thread( [this] {
+			while ( m_isRunning.test_and_set() ) {
+				websocketpp::lib::error_code ec;
 
-			return;
-		}
+				{
+					const std::lock_guard<std::mutex> lock( m_sendSync );
 
-		m_client.connect( m_connection );
-		m_clientThread = std::thread( [this] { m_client.run(); } );
+					m_connection = m_client.get_connection( m_endpoint, ec );
+
+					if ( !m_connection || ec ) {
+#ifdef ZUBR_DEBUG
+						std::cout
+							<< "could not create connection: " << ec.message()
+							<< std::endl;
+#endif
+
+						std::this_thread::sleep_for(
+							std::chrono::seconds( 2 ) );
+
+						continue;
+					}
+
+					m_client.connect( m_connection );
+				}
+
+				m_client.run();
+			}
+		} );
 	}
 	catch ( websocketpp::exception const & e ) {
 		std::cout << e.what() << std::endl;
+	}
+}
+
+void ConnectorWs::Wait()
+{
+	if ( m_clientThread.joinable() ) {
+		m_clientThread.join();
 	}
 }
