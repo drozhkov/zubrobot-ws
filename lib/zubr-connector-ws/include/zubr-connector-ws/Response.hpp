@@ -25,14 +25,16 @@ namespace zubr {
 		PlaceOrder,
 		ChannelOrders,
 		ChannelOrderBook,
-		ChannelPositions
+		ChannelPositions,
+		ChannelInstruments
 	};
 
-	class ResponseWs : public Deserializable {
+	class ResponseWs : public Serializable {
 	protected:
 		id_t m_id;
 		bool m_isOk;
 		ResponseType m_type;
+		std::string m_errorCodeName;
 
 	public:
 		ResponseWs( ResponseType type = ResponseType::_undef )
@@ -42,15 +44,16 @@ namespace zubr {
 		{
 		}
 
-		static std::shared_ptr<ResponseWs> Deserialize( const std::string & in,
+		static std::shared_ptr<ResponseWs> Deserialize( Serializer & s,
+			const std::string & in,
 			const std::function<ResponseType( id_t id )> & typeResolver );
 
-		void Deserialize( DeserializerWs * o ) override
+		void Deserialize( Serializer & s ) override
 		{
 		}
 
 		void Deserialize(
-			const std::shared_ptr<ResponseWs> & out, DeserializerWs * o );
+			const std::shared_ptr<ResponseWs> & out, Serializer & s );
 
 		ResponseType Type() const
 		{
@@ -62,9 +65,16 @@ namespace zubr {
 			return m_id;
 		}
 
+		/// @brief is valid response
+		/// @return
 		bool IsOk() const
 		{
 			return m_isOk;
+		}
+
+		const std::string & ErrorCodeName() const
+		{
+			return m_errorCodeName;
 		}
 	};
 
@@ -79,7 +89,7 @@ namespace zubr {
 		{
 		}
 
-		void Deserialize( DeserializerWs * o ) override;
+		void Deserialize( Serializer & s ) override;
 
 		int UserId() const
 		{
@@ -87,110 +97,27 @@ namespace zubr {
 		}
 	};
 
-	class OrderBookEntryItem : public Deserializable {
+	class PlaceOrderResponseWs : public ResponseWs {
 	protected:
-		Number m_price;
-		int m_quantity;
+		int64_t m_orderId;
 
 	public:
-		void Deserialize( DeserializerWs * o ) override;
-
-		const Number & Price() const
+		PlaceOrderResponseWs()
+			: ResponseWs( ResponseType::PlaceOrder )
 		{
-			return m_price;
 		}
 
-		int Quantity() const
+		void Deserialize( Serializer & s ) override;
+
+		int64_t OrderId() const
 		{
-			return m_quantity;
-		}
-	};
-
-	class OrderBookEntry : public Deserializable {
-	protected:
-		int m_instrumentId;
-		bool m_isSnapshot;
-
-		std::vector<OrderBookEntryItem> m_bids;
-		std::vector<OrderBookEntryItem> m_asks;
-
-	public:
-		void Deserialize( DeserializerWs * o ) override;
-
-		int InstrumentId() const
-		{
-			return m_instrumentId;
-		}
-
-		const std::vector<OrderBookEntryItem> & Bids() const
-		{
-			return m_bids;
-		}
-
-		const std::vector<OrderBookEntryItem> & Asks() const
-		{
-			return m_asks;
-		}
-	};
-
-	class OrderEntry : public Deserializable {
-	protected:
-		int m_instrumentId;
-		OrderType m_type;
-		OrderLifetime m_lifetime;
-		OrderDirection m_direction;
-		OrderStatus m_status;
-		int m_quantityInitial;
-		int m_quantityRemaining;
-		Number m_price;
-
-	public:
-		void Deserialize( DeserializerWs * o ) override;
-
-		int InstrumentId() const
-		{
-			return m_instrumentId;
-		}
-
-		OrderType Type() const
-		{
-			return m_type;
-		}
-
-		OrderLifetime Lifetime() const
-		{
-			return m_lifetime;
-		}
-
-		OrderDirection Direction() const
-		{
-			return m_direction;
-		}
-
-		OrderStatus Status() const
-		{
-			return m_status;
-		}
-
-		int QuantityInitial() const
-		{
-			return m_quantityInitial;
-		}
-
-		int QuantityRemaining() const
-		{
-			return m_quantityRemaining;
-		}
-
-		const Number & Price() const
-		{
-			return m_price;
+			return m_orderId;
 		}
 	};
 
 	class ChannelOrdersResponseWs : public ResponseWs {
 	protected:
-		std::vector<OrderEntry> m_entries;
+		std::unordered_map<int, OrderEntry> m_entries;
 
 	public:
 		ChannelOrdersResponseWs()
@@ -198,9 +125,9 @@ namespace zubr {
 		{
 		}
 
-		void Deserialize( DeserializerWs * o ) override;
+		void Deserialize( Serializer & s ) override;
 
-		const std::vector<OrderEntry> & Entries() const
+		const std::unordered_map<int, OrderEntry> & Entries() const
 		{
 			return m_entries;
 		}
@@ -208,7 +135,7 @@ namespace zubr {
 
 	class ChannelOrderBookResponseWs : public ResponseWs {
 	protected:
-		std::vector<OrderBookEntry> m_entries;
+		std::unordered_map<int, OrderBookEntry> m_entries;
 
 	public:
 		ChannelOrderBookResponseWs()
@@ -216,9 +143,9 @@ namespace zubr {
 		{
 		}
 
-		void Deserialize( DeserializerWs * o ) override;
+		void Deserialize( Serializer & s ) override;
 
-		const std::vector<OrderBookEntry> & Entries() const
+		const std::unordered_map<int, OrderBookEntry> & Entries() const
 		{
 			return m_entries;
 		}
@@ -226,18 +153,7 @@ namespace zubr {
 
 	class ChannelPositionsResponseWs : public ResponseWs {
 	protected:
-		int m_instrumentId;
-		int m_quantity;
-
-		Number m_unrealizedPnl;
-		Number m_realizedPnl;
-		Number m_margin;
-		Number m_maxRemovableMargin;
-		Number m_entryPrice;
-		Number m_entryNotionalValue;
-		Number m_currentNotionalValue;
-		Number m_partialLiquidationPrice;
-		Number m_fullLiquidationPrice;
+		std::unordered_map<int, Position> m_entries;
 
 	public:
 		ChannelPositionsResponseWs()
@@ -245,31 +161,29 @@ namespace zubr {
 		{
 		}
 
-		void Deserialize( DeserializerWs * o ) override;
+		void Deserialize( Serializer & s ) override;
 
-		int InstrumentId() const
+		const std::unordered_map<int, Position> & Entries() const
 		{
-			return m_instrumentId;
+			return m_entries;
+		}
+	};
+
+	class ChannelInstrumentsResponseWs : public ResponseWs {
+	protected:
+		std::unordered_map<int, Instrument> m_list;
+
+	public:
+		ChannelInstrumentsResponseWs()
+			: ResponseWs( ResponseType::ChannelInstruments )
+		{
 		}
 
-		const Number & UnrealizedPnl() const
-		{
-			return m_unrealizedPnl;
-		}
+		void Deserialize( Serializer & s ) override;
 
-		const Number & RealizedPnl() const
+		const std::unordered_map<int, Instrument> & List() const
 		{
-			return m_realizedPnl;
-		}
-
-		const Number & Margin() const
-		{
-			return m_margin;
-		}
-
-		const Number & MaxRemovableMargin() const
-		{
-			return m_maxRemovableMargin;
+			return m_list;
 		}
 	};
 

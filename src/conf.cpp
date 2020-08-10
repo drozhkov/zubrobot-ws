@@ -34,11 +34,23 @@ void conf::LoadJson( const std::string & json )
 
 	m_instrumentId = doc["instrumentId"].GetInt();
 	m_quantity = doc["quantity"].GetInt();
-	m_positionStart = doc["positionStart"].GetInt();
-	m_positionMax = doc["positionMax"].GetInt();
+	m_positionSizeStart = doc["positionSizeStart"].GetInt();
+	m_positionSizeMax = doc["positionSizeMax"].GetInt();
 	m_shift = doc["shift"].GetDouble();
 	m_interest = doc["interest"].GetDouble();
-	m_useConfigStartPosition = doc["useConfigStartPosition"].GetBool();
+	m_useConfigStartPositionSize = doc["useConfigStartPositionSize"].GetBool();
+
+	std::string stringValue = doc["logLevel"].GetString();
+
+	if ( stringValue == "debug" ) {
+		m_logLevel = LogLevel::Debug;
+	}
+	else if ( stringValue == "info" ) {
+		m_logLevel = LogLevel::Info;
+	}
+	else {
+		m_logLevel = LogLevel::Error;
+	}
 
 	m_api.Deserialize( doc["api"] );
 }

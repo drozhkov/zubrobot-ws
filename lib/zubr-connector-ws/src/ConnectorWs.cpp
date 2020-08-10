@@ -5,13 +5,12 @@
 
 #include <limits>
 
+#include "zubr-core/Logger.hpp"
+
 #include "../include/zubr-connector-ws/Request.hpp"
 #include "../include/zubr-connector-ws/Response.hpp"
 
 #include "../include/zubr-connector-ws/ConnectorWs.hpp"
-
-
-//#define ZUBR_DEBUG
 
 
 using namespace zubr;
@@ -25,52 +24,62 @@ void ConnectorWs::OnWsOpen( websocketpp::connection_hdl hdl )
 	Send<AuthRequestWs>( m_keyId, m_keySecret );
 }
 
-void ConnectorWs::OnWsMessage( websocketpp::connection_hdl,
+void ConnectorWs::OnWsMessage( websocketpp::connection_hdl hdl,
 	websocketpp::client<websocketpp::config::asio_tls_client>::message_ptr msg )
 {
 	auto & payload = msg->get_payload();
 
-#ifdef ZUBR_DEBUG
-	std::cout << payload << std::endl;
-#endif
+	ZUBR_LOG_DEBUG( payload );
 
-	auto res = ResponseWs::Deserialize( payload, [this]( id_t id ) {
-		const std::lock_guard<std::mutex> lock( m_reqMapSync );
-		auto reqMapIt = m_reqMap.find( id );
+	auto res = ResponseWs::Deserialize(
+		*m_serializerFactory.Create(), payload, [this]( id_t id ) {
+			const std::lock_guard<std::mutex> lock( m_reqMapSync );
+			auto reqMapIt = m_reqMap.find( id );
 
-		if ( m_reqMap.end() != reqMapIt ) {
-			if ( reqMapIt->second.MethodName()
-				 == AuthRequestWs::ReqMethodName ) {
+			if ( m_reqMap.end() != reqMapIt ) {
+				if ( reqMapIt->second.MethodName()
+					 == AuthRequestWs::ReqMethodName ) {
 
-				return ResponseType::Auth;
+					return ResponseType::Auth;
+				}
+
+				if ( reqMapIt->second.MethodName()
+					 == PlaceOrderRequestWs::ReqMethodName ) {
+
+					return ResponseType::PlaceOrder;
+				}
+
+				m_reqMap.erase( id );
 			}
 
-			if ( reqMapIt->second.MethodName()
-				 == PlaceOrderRequestWs::ReqMethodName ) {
-
-				return ResponseType::PlaceOrder;
-			}
-
-			m_reqMap.erase( id );
-		}
-
-		return ResponseType::_undef;
-	} );
+			return ResponseType::_undef;
+		} );
 
 	if ( res->Type() == ResponseType::Auth ) {
-#ifdef ZUBR_DEBUG
-		std::cout << "auth result: " << ( res->IsOk() ? "ok" : "err" )
-				  << std::endl;
-#endif
-
 		if ( m_connectHandler ) {
 			m_connectHandler( *static_cast<AuthResponseWs *>( res.get() ) );
+
+			if ( !res->IsOk() ) {
+				ZUBR_LOG_ERROR( "authentication failed" );
+				m_isRunning.clear();
+
+				websocketpp::lib::error_code ec;
+				m_client.close(
+					hdl, websocketpp::close::status::normal, "foo", ec );
+			}
 		}
 	}
 
 	if ( m_messageHandler ) {
 		m_messageHandler( *res );
 	}
+}
+
+void ConnectorWs::OnWsFail( websocketpp::connection_hdl )
+{
+	ZUBR_LOG_ERROR( "ConnectorWs::OnWsFail" );
+	m_isRunning.clear();
+	m_client.stop();
 }
 
 websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context>
@@ -112,11 +121,9 @@ zubr::id_t ConnectorWs::Send( RequestWs & r )
 	}
 
 	std::string req;
-	RequestWs::Serialize( req, r );
+	RequestWs::Serialize( req, *m_serializerFactory.Create(), r );
 
-#ifdef ZUBR_DEBUG
-	std::cout << req << std::endl;
-#endif
+	ZUBR_LOG_DEBUG( req );
 
 	std::error_code ec;
 	m_client.send(
@@ -128,10 +135,7 @@ zubr::id_t ConnectorWs::Send( RequestWs & r )
 void ConnectorWs::Start()
 {
 	try {
-		m_client.set_access_channels( websocketpp::log::alevel::all );
-		m_client.clear_access_channels(
-			websocketpp::log::alevel::frame_payload );
-
+		m_client.set_access_channels( websocketpp::log::alevel::none );
 		m_client.set_error_channels( websocketpp::log::elevel::all );
 
 		m_client.init_asio();
@@ -153,6 +157,11 @@ void ConnectorWs::Start()
 				m_hostname.c_str(),
 				websocketpp::lib::placeholders::_1 ) );
 
+		m_client.set_fail_handler(
+			websocketpp::lib::bind( &ConnectorWs::OnWsFail,
+				this,
+				websocketpp::lib::placeholders::_1 ) );
+
 		m_isRunning.test_and_set();
 
 		m_clientThread = std::thread( [this] {
@@ -165,11 +174,7 @@ void ConnectorWs::Start()
 					m_connection = m_client.get_connection( m_endpoint, ec );
 
 					if ( !m_connection || ec ) {
-#ifdef ZUBR_DEBUG
-						std::cout
-							<< "could not create connection: " << ec.message()
-							<< std::endl;
-#endif
+						ZUBR_LOG_ERROR( ec.message() );
 
 						std::this_thread::sleep_for(
 							std::chrono::seconds( 2 ) );
@@ -182,6 +187,21 @@ void ConnectorWs::Start()
 
 				m_client.run();
 			}
+
+			m_isRunning.clear();
+		} );
+
+		m_pingThread = std::thread( [this] {
+			while ( m_isRunning.test_and_set() ) {
+				std::this_thread::sleep_for( std::chrono::seconds( 14 ) );
+
+				{
+					const std::lock_guard<std::mutex> lock( m_sendSync );
+					m_client.ping( m_connection, "zubrobot-ws" );
+				}
+			}
+
+			m_isRunning.clear();
 		} );
 	}
 	catch ( websocketpp::exception const & e ) {

@@ -3,7 +3,8 @@
 ## dependencies
 
 - WebSocket++
-- Boost System
+- Boost.System
+- Boost.Log
 - RapidJSON
 - OpenSSL
 - pthreads

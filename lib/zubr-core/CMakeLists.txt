@@ -4,5 +4,6 @@ project(zubr-core)
 
 #
 add_library(${PROJECT_NAME}
-	src/ZubrCore.cpp
+	src/JsonSerializer.cpp
+	src/Types.cpp
 )

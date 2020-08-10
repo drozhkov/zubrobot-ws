@@ -3,7 +3,7 @@
 
 #
 ##
-find_package(Boost COMPONENTS system)
+find_package(Boost COMPONENTS system log log_setup)
 
 
 #
@@ -16,6 +16,9 @@ set(LIBS
 ##
 set(LIBS
 	${LIBS}
+	${Boost_LOG_LIBRARY} 
+	${Boost_LOG_SETUP_LIBRARY} 
+	${Boost_SYSTEM_LIBRARY}
 )
 
 ##
@@ -33,8 +36,12 @@ set(LIBS
 
 
 # 
-add_executable (${PROJECT_NAME} zubrobot-ws.cpp conf.cpp)
+add_executable (${PROJECT_NAME} 
+	zubrobot-ws.cpp 
+	conf.cpp 
+	bot.cpp
+)
 
 
 #
-target_link_libraries(${PROJECT_NAME} ${LIBS} ${Boost_SYSTEM_LIBRARY})
+target_link_libraries(${PROJECT_NAME} ${LIBS})

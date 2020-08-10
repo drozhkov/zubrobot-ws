@@ -3,70 +3,31 @@
 /// 0.0 - created (Denis Rozhkov <denis@rozhkoff.com>)
 ///
 
-#include <iostream>
-
 #include "rapidjson/document.h"
 
 #include "../include/zubr-connector-ws/Response.hpp"
 
 
-//#define ZUBR_DEBUG
-
-
 using namespace zubr;
 
 
-struct zubr::DeserializerWs {
-	rapidjson::Document Document;
-	rapidjson::Value * Value;
-
-
-	void MoveToMember( const std::string & name )
-	{
-		Value = &( ( *Value )[name.c_str()] );
-	}
-};
-
-
-int64_t Deserializable::GetIntOrDefault(
-	DeserializerWs * o, const std::string & memberName, int64_t defaultValue )
-{
-
-	return ( o->Value->HasMember( memberName.c_str() )
-				 ? ( *( o->Value ) )[memberName.c_str()].GetInt64()
-				 : defaultValue );
-}
-
-std::string Deserializable::GetStringOrDefault( DeserializerWs * o,
-	const std::string & memberName,
-	const std::string & defaultValue )
-{
-
-	return ( o->Value->HasMember( memberName.c_str() )
-				 ? ( *( o->Value ) )[memberName.c_str()].GetString()
-				 : defaultValue );
-}
-
-
-std::shared_ptr<ResponseWs> ResponseWs::Deserialize( const std::string & in,
+std::shared_ptr<ResponseWs> ResponseWs::Deserialize( Serializer & s,
+	const std::string & in,
 	const std::function<ResponseType( id_t id )> & typeResolver )
 {
+
 	if ( in.empty() ) {
 		return std::make_shared<ResponseWs>( ResponseType::_undef );
 	}
 
-	DeserializerWs deserializer;
-	deserializer.Document.Parse( in.c_str() );
-	deserializer.Value = &deserializer.Document;
+	s.FromString( in );
 
-	auto id = GetIntOrDefault( &deserializer, "id" );
+	id_t id;
+	s.Deserialize( id, "id" );
+	auto resResult = s.GetObject( "result" );
 
-	deserializer.Value = &( deserializer.Document["result"] );
-	auto channelName = GetStringOrDefault( &deserializer, "channel" );
-
-#ifdef ZUBR_DEBUG
-	std::cout << "id, channelName: " << id << ", " << channelName << std::endl;
-#endif
+	std::string channelName;
+	resResult->Deserialize( channelName, "channel" );
 
 	std::shared_ptr<ResponseWs> result;
 
@@ -88,15 +49,16 @@ std::shared_ptr<ResponseWs> ResponseWs::Deserialize( const std::string & in,
 				result.reset( new ChannelPositionsResponseWs );
 
 				break;
+
+			case Channel::Instruments:
+				result.reset( new ChannelInstrumentsResponseWs );
+
+				break;
 		}
 	}
 
 	if ( !result ) {
 		auto type = typeResolver( id );
-
-#ifdef ZUBR_DEBUG
-		std::cout << "type: " << static_cast<int>( type ) << std::endl;
-#endif
 
 		switch ( type ) {
 			case ResponseType::Auth:
@@ -104,6 +66,7 @@ std::shared_ptr<ResponseWs> ResponseWs::Deserialize( const std::string & in,
 				break;
 
 			case ResponseType::PlaceOrder:
+				result.reset( new PlaceOrderResponseWs );
 				break;
 		}
 	}
@@ -113,20 +76,20 @@ std::shared_ptr<ResponseWs> ResponseWs::Deserialize( const std::string & in,
 	}
 
 	result->m_id = id;
-
-	result->Deserialize( result, &deserializer );
+	result->Deserialize( result, *resResult );
 
 	return result;
 }
 
 void ResponseWs::Deserialize(
-	const std::shared_ptr<ResponseWs> & out, DeserializerWs * o )
+	const std::shared_ptr<ResponseWs> & out, Serializer & s )
 {
-	if ( o->Value->HasMember( "data" ) ) {
-		o->MoveToMember( "data" );
-	}
 
-	auto stringValue = GetStringOrDefault( o, "tag" );
+	auto data = s.GetObject( "data" );
+	Serializer & s_ = data ? *data : s;
+
+	std::string stringValue;
+	s_.Deserialize( stringValue, "tag" );
 
 	if ( "ok" == stringValue ) {
 		m_isOk = true;
@@ -135,159 +98,74 @@ void ResponseWs::Deserialize(
 		m_isOk = false;
 	}
 
-	if ( o->Value->HasMember( "value" ) ) {
-		o->MoveToMember( "value" );
-		Deserialize( o );
+	auto value = s_.GetObject( "value" );
+
+	if ( value ) {
+		if ( m_isOk ) {
+			Deserialize( *value );
+		}
+		else {
+			value->Deserialize( m_errorCodeName, "code" );
+		}
 	}
 }
 
 
-void Number::Deserialize( DeserializerWs * o )
+void AuthResponseWs::Deserialize( Serializer & s )
 {
-	if ( o->Value->IsNull() ) {
-		return;
-	}
-
-	m_significand = GetIntOrDefault( o, "mantissa" );
-	Exponent( GetIntOrDefault( o, "exponent" ) );
+	s.Deserialize( m_userId, "userId" );
 }
 
 
-void Time::Deserialize( DeserializerWs * o )
+void PlaceOrderResponseWs::Deserialize( Serializer & s )
 {
+	std::string stringValue;
+	s.Deserialize( stringValue );
+	m_orderId = std::stoll( stringValue );
 }
 
 
-void OrderBookEntryItem::Deserialize( DeserializerWs * o )
+void ChannelOrdersResponseWs::Deserialize( Serializer & s )
 {
-	m_quantity = GetIntOrDefault( o, "size" );
+	std::string stringValue;
 
-	o->MoveToMember( "price" );
-	m_price.Deserialize( o );
-}
+	s.Deserialize( stringValue, "type" );
 
-
-void OrderBookEntry::Deserialize( DeserializerWs * o )
-{
-	m_instrumentId = GetIntOrDefault( o, "instrumentId" );
-
-	auto & v = *o->Value;
-	const auto & bids = v["bids"].GetArray();
-
-	for ( rapidjson::SizeType i = 0; i < bids.Size(); ++i ) {
-		OrderBookEntryItem item;
-
-		o->Value = &( bids[i] );
-		item.Deserialize( o );
-
-		m_bids.push_back( item );
-	}
-
-	const auto & asks = v["asks"].GetArray();
-
-	for ( rapidjson::SizeType i = 0; i < asks.Size(); ++i ) {
-		OrderBookEntryItem item;
-
-		o->Value = &( asks[i] );
-		item.Deserialize( o );
-
-		m_asks.push_back( item );
-	}
-}
-
-
-void OrderEntry::Deserialize( DeserializerWs * o )
-{
-	m_instrumentId = GetIntOrDefault( o, "instrumentId" );
-	m_type
-		= OrderEnumHelper::FromOrderTypeName( GetStringOrDefault( o, "type" ) );
-
-	m_lifetime = OrderEnumHelper::FromOrderLifetimeName(
-		GetStringOrDefault( o, "timeInForce" ) );
-
-	m_direction = OrderEnumHelper::FromOrderDirectionName(
-		GetStringOrDefault( o, "side" ) );
-
-	m_status = OrderEnumHelper::FromOrderStatusName(
-		GetStringOrDefault( o, "status" ) );
-
-	o->MoveToMember( "price" );
-	m_price.Deserialize( o );
-}
-
-
-void AuthResponseWs::Deserialize( DeserializerWs * o )
-{
-	m_userId = GetIntOrDefault( o, "userId" );
-}
-
-
-void ChannelOrdersResponseWs::Deserialize( DeserializerWs * o )
-{
-	auto type = GetStringOrDefault( o, "type" );
-
-	if ( type == "update" ) {
-		o->MoveToMember( "payload" );
-
+	if ( "update" == stringValue ) {
 		OrderEntry entry;
-		entry.Deserialize( o );
+		s.Deserialize( entry, "payload" );
 
-		m_entries.push_back( entry );
+		m_entries[entry.InstrumentId()] = entry;
 	}
 }
 
 
-void ChannelOrderBookResponseWs::Deserialize( DeserializerWs * o )
+void ChannelOrderBookResponseWs::Deserialize( Serializer & s )
 {
-	auto & v = *o->Value;
+	s.Deserialize( m_entries );
+}
 
-	for ( auto & m : v.GetObject() ) {
-		o->Value = &( v[m.name.GetString()] );
 
-		OrderBookEntry entry;
-		entry.Deserialize( o );
+void ChannelPositionsResponseWs::Deserialize( Serializer & s )
+{
+	std::string stringValue;
 
-		m_entries.push_back( entry );
+	s.Deserialize( stringValue, "type" );
+
+	if ( "update" == stringValue ) {
+		Position p;
+		s.Deserialize( p, "payload" );
+
+		m_entries[p.InstrumentId()] = p;
+	}
+	else if ( "snapshot" == stringValue ) {
+		auto s_ = s.GetObject( "payload" );
+		s_->Deserialize( m_entries );
 	}
 }
 
 
-void ChannelPositionsResponseWs::Deserialize( DeserializerWs * o )
+void ChannelInstrumentsResponseWs::Deserialize( Serializer & s )
 {
-	auto type = GetStringOrDefault( o, "type" );
-
-	if ( type == "update" ) {
-		o->MoveToMember( "payload" );
-
-		m_instrumentId = GetIntOrDefault( o, "instrumentId" );
-		m_quantity = GetIntOrDefault( o, "size" );
-
-		auto & v = *o->Value;
-		o->Value = &v["unrealizedPnl"];
-		m_unrealizedPnl.Deserialize( o );
-
-		o->Value = &v["realizedPnl"];
-		m_realizedPnl.Deserialize( o );
-
-		o->Value = &v["margin"];
-		m_margin.Deserialize( o );
-
-		o->Value = &v["maxRemovableMargin"];
-		m_maxRemovableMargin.Deserialize( o );
-
-		o->Value = &v["entryPrice"];
-		m_entryPrice.Deserialize( o );
-
-		o->Value = &v["entryNotionalValue"];
-		m_entryNotionalValue.Deserialize( o );
-
-		o->Value = &v["currentNotionalValue"];
-		m_currentNotionalValue.Deserialize( o );
-
-		o->Value = &v["partialLiquidationPrice"];
-		m_partialLiquidationPrice.Deserialize( o );
-
-		o->Value = &v["fullLiquidationPrice"];
-		m_fullLiquidationPrice.Deserialize( o );
-	}
+	s.Deserialize( m_list );
 }

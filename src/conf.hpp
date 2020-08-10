@@ -11,6 +11,8 @@
 
 #include "rapidjson/document.h"
 
+#include "zubr-core/Logger.hpp"
+
 
 namespace zubr {
 
@@ -51,11 +53,12 @@ namespace zubr {
 
 		int m_instrumentId;
 		int m_quantity;
-		int m_positionStart;
-		int m_positionMax;
+		int m_positionSizeStart;
+		int m_positionSizeMax;
 		double m_shift;
 		double m_interest;
-		bool m_useConfigStartPosition;
+		bool m_useConfigStartPositionSize;
+		zubr::LogLevel m_logLevel;
 
 	public:
 		const confApi & Api() const
@@ -73,14 +76,14 @@ namespace zubr {
 			return m_quantity;
 		}
 
-		int PositionStart() const
+		int PositionSizeStart() const
 		{
-			return m_positionStart;
+			return m_positionSizeStart;
 		}
 
-		int PositionMax() const
+		int PositionSizeMax() const
 		{
-			return m_positionMax;
+			return m_positionSizeMax;
 		}
 
 		double Shift() const
@@ -93,9 +96,14 @@ namespace zubr {
 			return m_interest;
 		}
 
-		bool UseConfigStartPosition() const
+		bool UseConfigStartPositionSize() const
 		{
-			return m_useConfigStartPosition;
+			return m_useConfigStartPositionSize;
+		}
+
+		zubr::LogLevel LogLevel() const
+		{
+			return m_logLevel;
 		}
 
 		void LoadJson( const std::string & json );

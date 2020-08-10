@@ -33,11 +33,14 @@ namespace zubr {
 		std::string m_endpoint;
 		std::string m_hostname;
 
+		const SerializerFactory & m_serializerFactory;
+
 		websocketpp::client<websocketpp::config::asio_tls_client> m_client;
 		websocketpp::client<
 			websocketpp::config::asio_tls_client>::connection_ptr m_connection;
 
 		std::thread m_clientThread;
+		std::thread m_pingThread;
 		std::atomic_flag m_isRunning;
 
 		std::mutex m_sendSync;
@@ -56,10 +59,10 @@ namespace zubr {
 			websocketpp::client<
 				websocketpp::config::asio_tls_client>::message_ptr msg );
 
+		void OnWsFail( websocketpp::connection_hdl );
+
 		websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context>
 		OnWsTlsInit( const char * hostname, websocketpp::connection_hdl );
-
-		id_t Send( RequestWs & r );
 
 	public:
 		/// @brief ZUBR websocket connector
@@ -70,10 +73,12 @@ namespace zubr {
 		/// @return
 		ConnectorWs( const std::string & keyId,
 			const std::string & keySecret,
+			const SerializerFactory & serializerFactory,
 			const std::string & endpoint = "wss://uat.zubr.io/api/v1/ws",
 			const std::string & hostname = "uat.zubr.io" )
 			: m_keyId( keyId )
 			, m_keySecret( keySecret )
+			, m_serializerFactory( serializerFactory )
 			, m_endpoint( endpoint )
 			, m_hostname( hostname )
 			, m_reqId( 0 )
@@ -85,7 +90,10 @@ namespace zubr {
 			m_isRunning.clear();
 		}
 
-		/// @brief sends request
+		/// @brief send request
+		id_t Send( RequestWs & r );
+
+		/// @brief send request
 		/// @tparam TReq type of request
 		/// @tparam ...TArgs
 		/// @param ...args args for request
@@ -97,7 +105,7 @@ namespace zubr {
 			return Send( req );
 		}
 
-		/// @brief sets connection handler (invoked on auth response message)
+		/// @brief set connection handler (invoked on auth response message)
 		/// @param handler
 		void SetConnectHandler(
 			const std::function<void( AuthResponseWs & )> & handler )
@@ -115,7 +123,10 @@ namespace zubr {
 			m_messageHandler = handler;
 		}
 
+		/// @brief start client
 		void Start() override;
+
+		/// @brief wait for client termination
 		void Wait();
 	};
 

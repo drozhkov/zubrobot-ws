@@ -10,11 +10,14 @@
 #include <memory>
 #include <string>
 
+#include "zubr-core/Serializer.hpp"
+
 #include "Types.hpp"
 
 
 namespace zubr {
 
+	/// @brief base class for requests
 	class RequestWs : public Serializable {
 	protected:
 		const static int MethodIdRequest = 9;
@@ -38,25 +41,31 @@ namespace zubr {
 		{
 		}
 
-		static std::shared_ptr<SerializerWs> CreateSerializer();
-		static void Serialize( std::string & out, RequestWs & req );
+		static void Serialize(
+			std::string & out, Serializer & s, RequestWs & req );
 
-		void Serialize( SerializerWs * o ) override
+		void Serialize( Serializer & s ) override
 		{
 		}
 
-		void Serialize( SerializerWs * o, RequestWs & req );
+		void SerializeBase( Serializer & s );
 
+		/// @brief set request ID
+		/// @param id
 		void Id( int id )
 		{
 			m_id = id;
 		}
 
+		/// @brief get request ID
+		/// @return
 		int Id() const
 		{
 			return m_id;
 		}
 
+		/// @brief get method name
+		/// @return
 		const std::string & MethodName() const
 		{
 			return m_methodName;
@@ -85,7 +94,7 @@ namespace zubr {
 		{
 		}
 
-		void Serialize( SerializerWs * o ) override;
+		void Serialize( Serializer & s ) override;
 	};
 
 	/// @brief place order request
@@ -133,9 +142,38 @@ namespace zubr {
 		{
 		}
 
-		void Serialize( SerializerWs * o ) override;
+		void Serialize( Serializer & s ) override;
+
+		OrderDirection Direction() const
+		{
+			return m_direction;
+		}
 	};
 
+	class ReplaceOrderRequestWs : public RequestWs {
+	protected:
+		int64_t m_orderId;
+		Number m_price;
+		int m_quantity;
+
+	public:
+		const static std::string ReqMethodName;
+
+	public:
+		/// @brief replace order request
+		ReplaceOrderRequestWs(
+			int64_t orderId, const Number & price, int quantity )
+			: RequestWs( ReqMethodName )
+			, m_orderId( orderId )
+			, m_price( price )
+			, m_quantity( quantity )
+		{
+		}
+
+		void Serialize( Serializer & s ) override;
+	};
+
+	/// @brief channel subscription request
 	class SubscribeRequestWs : public RequestWs {
 	public:
 		SubscribeRequestWs( Channel channel )
