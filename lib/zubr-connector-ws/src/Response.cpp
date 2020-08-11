@@ -1,3 +1,27 @@
+/*
+MIT License
+
+Copyright (c) 2020 Denis Rozhkov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 /// Response.cpp
 ///
 /// 0.0 - created (Denis Rozhkov <denis@rozhkoff.com>)
@@ -13,7 +37,7 @@ using namespace zubr;
 
 std::shared_ptr<ResponseWs> ResponseWs::Deserialize( Serializer & s,
 	const std::string & in,
-	const std::function<ResponseType( id_t id )> & typeResolver )
+	const std::function<ResponseType( t_req_id id )> & typeResolver )
 {
 
 	if ( in.empty() ) {
@@ -22,7 +46,7 @@ std::shared_ptr<ResponseWs> ResponseWs::Deserialize( Serializer & s,
 
 	s.FromString( in );
 
-	id_t id;
+	t_req_id id;
 	s.Deserialize( id, "id" );
 	auto resResult = s.GetObject( "result" );
 
@@ -135,7 +159,7 @@ void ChannelOrdersResponseWs::Deserialize( Serializer & s )
 		OrderEntry entry;
 		s.Deserialize( entry, "payload" );
 
-		m_entries[entry.InstrumentId()] = entry;
+		m_entries[entry.Id()] = entry;
 	}
 }
 

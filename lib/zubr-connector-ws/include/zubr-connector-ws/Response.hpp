@@ -1,3 +1,27 @@
+/*
+MIT License
+
+Copyright (c) 2020 Denis Rozhkov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 /// Response.hpp
 ///
 /// 0.0 - created (Denis Rozhkov <denis@rozhkoff.com>)
@@ -17,8 +41,6 @@
 
 namespace zubr {
 
-	typedef int64_t id_t;
-
 	enum class ResponseType {
 		_undef = 0,
 		Auth,
@@ -31,7 +53,7 @@ namespace zubr {
 
 	class ResponseWs : public Serializable {
 	protected:
-		id_t m_id;
+		t_req_id m_id;
 		bool m_isOk;
 		ResponseType m_type;
 		std::string m_errorCodeName;
@@ -46,7 +68,7 @@ namespace zubr {
 
 		static std::shared_ptr<ResponseWs> Deserialize( Serializer & s,
 			const std::string & in,
-			const std::function<ResponseType( id_t id )> & typeResolver );
+			const std::function<ResponseType( t_req_id id )> & typeResolver );
 
 		void Deserialize( Serializer & s ) override
 		{
@@ -60,7 +82,7 @@ namespace zubr {
 			return m_type;
 		}
 
-		int Id() const
+		t_req_id Id() const
 		{
 			return m_id;
 		}
@@ -99,7 +121,7 @@ namespace zubr {
 
 	class PlaceOrderResponseWs : public ResponseWs {
 	protected:
-		int64_t m_orderId;
+		t_order_id m_orderId;
 
 	public:
 		PlaceOrderResponseWs()
@@ -109,7 +131,7 @@ namespace zubr {
 
 		void Deserialize( Serializer & s ) override;
 
-		int64_t OrderId() const
+		t_order_id OrderId() const
 		{
 			return m_orderId;
 		}
@@ -117,7 +139,7 @@ namespace zubr {
 
 	class ChannelOrdersResponseWs : public ResponseWs {
 	protected:
-		std::unordered_map<int, OrderEntry> m_entries;
+		std::unordered_map<t_order_id, OrderEntry> m_entries;
 
 	public:
 		ChannelOrdersResponseWs()
@@ -127,7 +149,7 @@ namespace zubr {
 
 		void Deserialize( Serializer & s ) override;
 
-		const std::unordered_map<int, OrderEntry> & Entries() const
+		const std::unordered_map<t_order_id, OrderEntry> & Entries() const
 		{
 			return m_entries;
 		}
@@ -135,7 +157,7 @@ namespace zubr {
 
 	class ChannelOrderBookResponseWs : public ResponseWs {
 	protected:
-		std::unordered_map<int, OrderBookEntry> m_entries;
+		std::unordered_map<t_instrument_id, OrderBookEntry> m_entries;
 
 	public:
 		ChannelOrderBookResponseWs()
@@ -145,7 +167,8 @@ namespace zubr {
 
 		void Deserialize( Serializer & s ) override;
 
-		const std::unordered_map<int, OrderBookEntry> & Entries() const
+		const std::unordered_map<t_instrument_id, OrderBookEntry> &
+		Entries() const
 		{
 			return m_entries;
 		}
@@ -153,7 +176,7 @@ namespace zubr {
 
 	class ChannelPositionsResponseWs : public ResponseWs {
 	protected:
-		std::unordered_map<int, Position> m_entries;
+		std::unordered_map<t_instrument_id, Position> m_entries;
 
 	public:
 		ChannelPositionsResponseWs()
@@ -163,7 +186,7 @@ namespace zubr {
 
 		void Deserialize( Serializer & s ) override;
 
-		const std::unordered_map<int, Position> & Entries() const
+		const std::unordered_map<t_instrument_id, Position> & Entries() const
 		{
 			return m_entries;
 		}
@@ -171,7 +194,7 @@ namespace zubr {
 
 	class ChannelInstrumentsResponseWs : public ResponseWs {
 	protected:
-		std::unordered_map<int, Instrument> m_list;
+		std::unordered_map<t_instrument_id, Instrument> m_list;
 
 	public:
 		ChannelInstrumentsResponseWs()
@@ -181,7 +204,7 @@ namespace zubr {
 
 		void Deserialize( Serializer & s ) override;
 
-		const std::unordered_map<int, Instrument> & List() const
+		const std::unordered_map<t_instrument_id, Instrument> & List() const
 		{
 			return m_list;
 		}

@@ -1,3 +1,27 @@
+/*
+MIT License
+
+Copyright (c) 2020 Denis Rozhkov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 /// ConnectorWs.hpp
 ///
 /// 0.0 - created (Denis Rozhkov <denis@rozhkoff.com>)
@@ -45,9 +69,9 @@ namespace zubr {
 
 		std::mutex m_sendSync;
 
-		volatile id_t m_reqId;
+		volatile t_req_id m_reqId;
 
-		std::unordered_map<id_t, RequestWs> m_reqMap;
+		std::unordered_map<t_req_id, RequestWs> m_reqMap;
 		std::mutex m_reqMapSync;
 
 		std::function<void( ResponseWs & )> m_messageHandler;
@@ -91,7 +115,7 @@ namespace zubr {
 		}
 
 		/// @brief send request
-		id_t Send( RequestWs & r );
+		t_req_id Send( RequestWs & r );
 
 		/// @brief send request
 		/// @tparam TReq type of request
@@ -99,7 +123,7 @@ namespace zubr {
 		/// @param ...args args for request
 		/// @return request ID
 		template <typename TReq, typename... TArgs>
-		id_t Send( const TArgs &... args )
+		t_req_id Send( const TArgs &... args )
 		{
 			TReq req( args... );
 			return Send( req );

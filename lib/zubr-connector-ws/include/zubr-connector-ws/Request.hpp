@@ -1,3 +1,27 @@
+/*
+MIT License
+
+Copyright (c) 2020 Denis Rozhkov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 /// Request.hpp
 ///
 /// 0.0 - created (Denis Rozhkov <denis@rozhkoff.com>)
@@ -106,6 +130,7 @@ namespace zubr {
 		int m_quantity;
 		OrderType m_type;
 		OrderLifetime m_lifetime;
+		bool m_isReplaceOrder;
 
 	public:
 		const static std::string ReqMethodName;
@@ -139,6 +164,7 @@ namespace zubr {
 			, m_quantity( quantity )
 			, m_type( type )
 			, m_lifetime( lifetime )
+			, m_isReplaceOrder( false )
 		{
 		}
 
@@ -148,11 +174,41 @@ namespace zubr {
 		{
 			return m_direction;
 		}
+
+		int Quantity() const
+		{
+			return m_quantity;
+		}
+
+		void Quantity( int v )
+		{
+			m_quantity = v;
+		}
+
+		const Number & Price() const
+		{
+			return m_price;
+		}
+
+		void Price( const Number & v )
+		{
+			m_price = v;
+		}
+
+		bool IsReplaceOrder() const
+		{
+			return m_isReplaceOrder;
+		}
+
+		void IsReplaceOrder( bool v )
+		{
+			m_isReplaceOrder = v;
+		}
 	};
 
 	class ReplaceOrderRequestWs : public RequestWs {
 	protected:
-		int64_t m_orderId;
+		t_order_id m_orderId;
 		Number m_price;
 		int m_quantity;
 
@@ -162,11 +218,29 @@ namespace zubr {
 	public:
 		/// @brief replace order request
 		ReplaceOrderRequestWs(
-			int64_t orderId, const Number & price, int quantity )
+			t_order_id orderId, const Number & price, int quantity )
 			: RequestWs( ReqMethodName )
 			, m_orderId( orderId )
 			, m_price( price )
 			, m_quantity( quantity )
+		{
+		}
+
+		void Serialize( Serializer & s ) override;
+	};
+
+	class CancelOrderRequestWs : public RequestWs {
+	protected:
+		t_order_id m_orderId;
+
+	public:
+		const static std::string ReqMethodName;
+
+	public:
+		/// @brief cancel order request
+		CancelOrderRequestWs( t_order_id orderId )
+			: RequestWs( ReqMethodName )
+			, m_orderId( orderId )
 		{
 		}
 

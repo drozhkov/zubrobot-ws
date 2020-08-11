@@ -1,3 +1,27 @@
+/*
+MIT License
+
+Copyright (c) 2020 Denis Rozhkov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
 /// Types.hpp
 ///
 /// 0.0 - created (Denis Rozhkov <denis@rozhkoff.com>)
@@ -15,6 +39,10 @@
 
 
 namespace zubr {
+
+	typedef int64_t t_order_id;
+	typedef int t_instrument_id;
+
 
 	class Number : public Serializable {
 	protected:
@@ -115,6 +143,26 @@ namespace zubr {
 							  / m_factor );
 
 			return *this;
+		}
+
+		bool operator<( const Number & r ) const
+		{
+			auto exponentDiff = m_exponent - r.m_exponent;
+
+			auto s1 = m_significand;
+			auto s2 = r.m_significand;
+
+			if ( 0 == exponentDiff ) {
+				return ( m_significand < r.m_significand );
+			}
+			else if ( exponentDiff > 0 ) {
+				s1 *= std::pow( 10, exponentDiff );
+			}
+			else if ( exponentDiff < 0 ) {
+				s2 *= std::pow( 10, -exponentDiff );
+			}
+
+			return ( s1 < s2 );
 		}
 	};
 
@@ -350,6 +398,7 @@ namespace zubr {
 		int m_quantityInitial;
 		int m_quantityRemaining;
 		Number m_price;
+		t_order_id m_id;
 
 	public:
 		void Deserialize( Serializer & s ) override;
@@ -357,6 +406,11 @@ namespace zubr {
 		int InstrumentId() const
 		{
 			return m_instrumentId;
+		}
+		
+		t_order_id Id() const
+		{
+			return m_id;
 		}
 
 		OrderType Type() const
